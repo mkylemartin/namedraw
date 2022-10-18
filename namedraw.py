@@ -30,26 +30,37 @@ def read_names(input_file):
         for raw_line in name_lines:
             line = raw_line.split()
             # build families
-            if len(line) > 1:
-                family.append(line)
+            family.append(tuple(line))
             # build all names
             [names.append(name) for name in line]
     return family, names
 
 
 def draw_matches(family, names):
-        givers = names
-        receivers = names
+        if len(names) % 2 == 1:
+            print('oh no, odd number!')
+        
+        hat = names
+        picked = []
 
-        chosen = []
-
-        for giver in givers:
+        while hat:
+            giver = choice(hat)
+            hat.remove(giver)
+            
             # giver's family
-            givers_family = [fam for fam in family if giver in fam]
-            # chose a recipient
-            receiver = choice(receivers)
-            # match found
-            print(f'{giver: >10} -> {receiver}')
+            givers_fam = [fam for fam in family if giver in fam][0]
+            # print(givers_fam)
+            getter = choice(hat)
+            while (getter in givers_fam) or (getter in picked):
+                # chose again
+                getter = choice(hat)
+
+            picked.append(getter)
+            
+            print(f'{giver: <10} -> {getter}')
+
+        
+       
             
 
 
