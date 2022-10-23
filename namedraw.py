@@ -30,7 +30,7 @@ def read_names(input_file):
         for raw_line in name_lines:
             line = raw_line.split()
             # build families
-            family.append(tuple(line))
+            family.append(line)
             # build all names
             [names.append(name) for name in line]
     return family, names
@@ -61,10 +61,6 @@ def draw_matches(family, names):
 
         
        
-            
-
-
-
-
-family, names = read_names(input_names)
-draw_matches(family, names)
+if __name__ == "__main__":
+    family, names = read_names(input_names)
+    draw_matches(family, names)
