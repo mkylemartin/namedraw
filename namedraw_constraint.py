@@ -25,7 +25,7 @@ variables = {}
 for buyer in persons:
     receiver_dict = {}
     for receiver in persons:
-        receiver_dict[receiver] = model.NewIntVar(0, 1, f'{buyer: <10} gives a gift to {receiver}')
+        receiver_dict[receiver] = model.NewIntVar(0, 1, f'{buyer}\t gives a gift to {receiver}')
     variables[buyer] = receiver_dict
 
 for name, buyer in variables.items():
