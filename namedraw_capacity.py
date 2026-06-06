@@ -19,12 +19,12 @@ History file format (one year per blank-line-separated block):
 import argparse
 import sys
 
-from namedraw import read_names
+from namedraw import parse_constraint_file
 from ortools.sat.python import cp_model
 from tqdm import tqdm
 
 
-def build_model(persons, forbidden):
+def build_model(persons, couples, year_constraints):
     model = cp_model.CpModel()
     variables = {}
     for buyer in persons:
@@ -42,9 +42,12 @@ def build_model(persons, forbidden):
     for person in persons:
         model.Add(variables[person][person] == 0)
 
-    for name_1, name_2 in forbidden:
+    for name_1, name_2 in couples:
         model.Add(variables[name_1][name_2] == 0)
         model.Add(variables[name_2][name_1] == 0)
+
+    for giver, receiver in year_constraints:
+        model.Add(variables[giver][receiver] == 0)
 
     return model, variables
 
@@ -99,10 +102,9 @@ def main():
     parser.add_argument('--history', help='Optional history file of past assignments', default=None)
     args = parser.parse_args()
 
-    family, persons = read_names(args.input_names)
-    forbidden = [p for p in family if len(p) > 1]
+    persons, couples, year_constraints = parse_constraint_file(args.input_names)
 
-    model, variables = build_model(persons, forbidden)
+    model, variables = build_model(persons, couples, year_constraints)
 
     solver = cp_model.CpSolver()
     solver.parameters.enumerate_all_solutions = True
