@@ -7,7 +7,7 @@ from ortools.sat.python import cp_model
 """
     Usage:
         namedraw_constraint.py input_names.txt
-    
+
 """
 
 input_names = sys.argv[1]
@@ -25,7 +25,7 @@ variables = {}
 for buyer in persons:
     receiver_dict = {}
     for receiver in persons:
-        receiver_dict[receiver] = model.NewIntVar(0, 1, f'{buyer}\t gives a gift to {receiver}')
+        receiver_dict[receiver] = model.NewIntVar(0, 1, f'{buyer} gives a gift to {receiver}')
     variables[buyer] = receiver_dict
 
 for name, buyer in variables.items():
@@ -43,35 +43,38 @@ for name_1, name_2 in forbidden:
 
 
 class AllSolutionsStore(cp_model.CpSolverSolutionCallback):
-    """Count all solutions"""
+    """Enumerate all solutions and capture the first one as an example."""
 
     def __init__(self, variables):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.__variables = variables
         self.__solution_count = 0
-
+        self.__first_solution = []
 
     def on_solution_callback(self):
         self.__solution_count += 1
+        if self.__solution_count == 1:
+            for buyer, buyer_vars in self.__variables.items():
+                for receiver, var in buyer_vars.items():
+                    if self.Value(var):
+                        self.__first_solution.append((buyer, receiver))
 
     def solution_count(self):
         return self.__solution_count
 
-all_variables = []
-for name, x in variables.items():
-    all_variables += list(x.values())
+    def first_solution(self):
+        return self.__first_solution
+
 
 solver = cp_model.CpSolver()
-solutionsstore = AllSolutionsStore(all_variables)
-result = solver.SearchForAllSolutions(model, solutionsstore)
-print('Number of solutions found: %i' % solutionsstore.solution_count())
+solver.parameters.enumerate_all_solutions = True
+solutionsstore = AllSolutionsStore(variables)
+result = solver.Solve(model, solutionsstore)
+
+print(f'Number of solutions found: {solutionsstore.solution_count()}')
 print()
-solver = cp_model.CpSolver()
-result = solver.Solve(model)
 
-if result != cp_model.FEASIBLE:
-    for buyer, buyer_vars in variables.items():
-        for receiver, var in buyer_vars.items():
-            if solver.Value(var):
-                print(var)
-
+if result in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    print('Example assignment:')
+    for buyer, receiver in solutionsstore.first_solution():
+        print(f'  {buyer} gives a gift to {receiver}')
