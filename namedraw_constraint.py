@@ -3,6 +3,7 @@ import sys
 
 from namedraw import read_names
 from ortools.sat.python import cp_model
+from tqdm import tqdm
 
 """
     Usage:
@@ -50,14 +51,19 @@ class AllSolutionsStore(cp_model.CpSolverSolutionCallback):
         self.__variables = variables
         self.__solution_count = 0
         self.__first_solution = []
+        self.__pbar = tqdm(desc='Enumerating solutions', unit=' solutions', dynamic_ncols=True)
 
     def on_solution_callback(self):
         self.__solution_count += 1
+        self.__pbar.update(1)
         if self.__solution_count == 1:
             for buyer, buyer_vars in self.__variables.items():
                 for receiver, var in buyer_vars.items():
                     if self.Value(var):
                         self.__first_solution.append((buyer, receiver))
+
+    def close(self):
+        self.__pbar.close()
 
     def solution_count(self):
         return self.__solution_count
@@ -70,11 +76,17 @@ solver = cp_model.CpSolver()
 solver.parameters.enumerate_all_solutions = True
 solutionsstore = AllSolutionsStore(variables)
 result = solver.Solve(model, solutionsstore)
+solutionsstore.close()
 
-print(f'Number of solutions found: {solutionsstore.solution_count()}')
+col_w = max(len(p) for p in persons)
+
+print()
+print(f'Total unique assignments: {solutionsstore.solution_count()}')
 print()
 
 if result in (cp_model.OPTIMAL, cp_model.FEASIBLE):
     print('Example assignment:')
+    print()
     for buyer, receiver in solutionsstore.first_solution():
-        print(f'  {buyer} gives a gift to {receiver}')
+        print(f'  {buyer:<{col_w}}  →  {receiver}')
+    print()
