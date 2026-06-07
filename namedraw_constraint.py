@@ -1,77 +1,96 @@
 from random import shuffle
 import sys
 
-from namedraw import read_names
+from namedraw import parse_constraint_file
 from ortools.sat.python import cp_model
+from tqdm import tqdm
 
 """
     Usage:
         namedraw_constraint.py input_names.txt
-    
+
 """
 
 input_names = sys.argv[1]
 
-family, persons = read_names(input_names)
-
-# filter out singletons (e.g. Katie)
-forbidden = [p for p in family if len(p) > 1]
+persons, couples, year_constraints = parse_constraint_file(input_names)
 shuffle(persons)
 
 model = cp_model.CpModel()
 
 variables = {}
-
 for buyer in persons:
     receiver_dict = {}
     for receiver in persons:
-        receiver_dict[receiver] = model.NewIntVar(0, 1, f'{buyer}\t gives a gift to {receiver}')
+        receiver_dict[receiver] = model.NewIntVar(0, 1, f'{buyer} gives a gift to {receiver}')
     variables[buyer] = receiver_dict
 
-for name, buyer in variables.items():
-    model.Add(sum(buyer.values()) == 1)
+# Each person gives exactly one gift
+for buyer, buyer_vars in variables.items():
+    model.Add(sum(buyer_vars.values()) == 1)
 
-for name in persons:
-    model.Add(sum([receivers[name] for buyer_name, receivers in variables.items()]) == 1)
+# Each person receives exactly one gift
+for person in persons:
+    model.Add(sum(receivers[person] for receivers in variables.values()) == 1)
 
-for name in persons:
-    model.Add(variables[name][name] == 0)
+# No self-gifting
+for person in persons:
+    model.Add(variables[person][person] == 0)
 
-for name_1, name_2 in forbidden:
+# Couples can't give to each other (bidirectional)
+for name_1, name_2 in couples:
     model.Add(variables[name_1][name_2] == 0)
     model.Add(variables[name_2][name_1] == 0)
 
+# Past-year constraints: giver can't give to same receiver again (directional)
+for giver, receiver in year_constraints:
+    model.Add(variables[giver][receiver] == 0)
+
 
 class AllSolutionsStore(cp_model.CpSolverSolutionCallback):
-    """Count all solutions"""
+    """Enumerate all solutions and capture the first one as an example."""
 
     def __init__(self, variables):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.__variables = variables
         self.__solution_count = 0
-
+        self.__first_solution = []
+        self.__pbar = tqdm(desc='Enumerating solutions', unit=' solutions', dynamic_ncols=True)
 
     def on_solution_callback(self):
         self.__solution_count += 1
+        self.__pbar.update(1)
+        if self.__solution_count == 1:
+            for buyer, buyer_vars in self.__variables.items():
+                for receiver, var in buyer_vars.items():
+                    if self.Value(var):
+                        self.__first_solution.append((buyer, receiver))
+
+    def close(self):
+        self.__pbar.close()
 
     def solution_count(self):
         return self.__solution_count
 
-all_variables = []
-for name, x in variables.items():
-    all_variables += list(x.values())
+    def first_solution(self):
+        return self.__first_solution
+
 
 solver = cp_model.CpSolver()
-solutionsstore = AllSolutionsStore(all_variables)
-result = solver.SearchForAllSolutions(model, solutionsstore)
-print('Number of solutions found: %i' % solutionsstore.solution_count())
+solver.parameters.enumerate_all_solutions = True
+solutionsstore = AllSolutionsStore(variables)
+result = solver.Solve(model, solutionsstore)
+solutionsstore.close()
+
+col_w = max(len(p) for p in persons)
+
 print()
-solver = cp_model.CpSolver()
-result = solver.Solve(model)
+print(f'Total unique assignments: {solutionsstore.solution_count()}')
+print()
 
-if result != cp_model.FEASIBLE:
-    for buyer, buyer_vars in variables.items():
-        for receiver, var in buyer_vars.items():
-            if solver.Value(var):
-                print(var)
-
+if result in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    print('Example assignment:')
+    print()
+    for buyer, receiver in solutionsstore.first_solution():
+        print(f'  {buyer:<{col_w}}  →  {receiver}')
+    print()
